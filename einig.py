@@ -94,6 +94,19 @@ class Signature(namedtuple("Signature", "xs y")):
     return Signature(xs=tuple(x.replace(a, b) for x in self.xs),
                      y=self.y.replace(a, b))
 
+  def as_grouping(self):
+    """Convert this Signature to a `grouping` structure for use with `diag_scatter`/`diag_gather`.
+
+    Only unary, non-reducing signatures can be converted to such groupings."""
+    if len(self.xs) != 1:
+      # there *is* a natural generalization of the `grouping` structure to
+      # multiple arguments: each input would have its own grouping, with as
+      # many groups as there are output axes.
+      raise ValueError("only unary Signatures can be converted to groupings")
+    x, = self.xs
+    _, grouping = _grouping(x)
+    return grouping
+
 Signature.make = functools.singledispatch(util.notimplemented)
 Signature.make.register(Signature)(lambda sig: Signature(*sig))
 Signature.make.register(str)(lambda s: Signature.parse(s))
@@ -106,9 +119,11 @@ def diag_gather(x, grouping):
 
   `grouping` is a list of lists, each of which contains axes whose diagonal
   should be taken. Order of groups determines order of axes in the output.
-  Groups may contain any nonzero number of axes for simultaneous diagonalization
-  across multiple axes, and axes within groups need not be contiguous.
-  The grouping must form a partition: all axes of `x` must appear exactly once.
+  Groups may contain any nonzero number of axes for simultaneous
+  diagonalization across multiple axes, and axes within groups need not be
+  contiguous. The grouping must form a partition: all axes of `x` must appear
+  exactly once. A `grouping` may be obtained from an einsum signature through
+  `Signature.as_grouping`, e.g. `Signature("ii->i").as_grouping()`.
 
   Examples:
     `diag_gather(x, [[0, 1]]) <=> einsum("ii->i", x)`
@@ -145,11 +160,7 @@ def diag_scatter(x, grouping):
 
   `grouping` is a list of lists similar to that for `diag_gather` in the sense
   that if `y == diag_scatter(x, grouping)`, then `x == diag_gather(y, grouping)`
-  up to a loss of off-diagonal elements. With this in mind, the requirements on
-  `grouping` should be straightforward.
-
-  `grouping` is a list of lists, one for each axis in `x`. It must form a partition
-  of the axes of the result `y`.
+  up to a loss of off-diagonal elements.
 
   Examples:
     `diag_scatter(x, [[0, 1]]) <=> einsum("i->ii", x)`

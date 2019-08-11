@@ -17,3 +17,6 @@ def prod(xs):
 def notimplemented(*args, **kwargs):
   raise NotImplementedError()
 
+def ifnone(x, y):
+  return y() if x is None else x
+

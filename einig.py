@@ -135,19 +135,17 @@ def diag_gather(x, grouping):
     # TODO support this if a use case appears
     raise ValueError("empty groups are not allowed", grouping)
   shapes = [[x_shape[axis] for axis in group] for group in grouping]
-  if not all(util.all_equal(shape) for shape in shapes):
-    raise ValueError("grouped axes must have equal dimension", grouping, shapes)
-  if sorted(axis for group in grouping for axis in group) != list(range(len(x_shape))):
+  if sorted(axis for group in grouping for axis in group) != list(range(get_ndim(x))):
     # TODO consider supporting Ellipsis if it can be made predictable
     raise ValueError("grouping must reference all axes of x exactly once", grouping)
 
-  strides = [sum(x_shape[axes[0]] ** k for k in range(len(axes)))
-             for axes in grouping]
   # transpose the argument so that the tied axes are adjacent
   z = tf.transpose(x, [axis for axes in grouping for axis in axes])
   # flatten the tied axes and use strided slicing to select the diagonal elements
   z = tf.reshape(z, [util.prod([x_shape[axis] for axis in axes])
                      for axes in grouping])
+  strides = [tf.reduce_sum(tf.cumprod([x_shape[axis] for axis in axes], exclusive=True))
+             for axes in grouping]
   y = z[tuple(slice(None, None, stride)
               for stride in strides)]
   return y
@@ -332,11 +330,8 @@ def get_shape(x):
   shape = x.shape
   if isinstance(shape, tf.TensorShape):
     shape = shape.as_list()
-  shape = list(shape)
-  if None in shape:
-    # sorry
-    raise ValueError("shape must be fully defined")
-  return shape
+  return [util.ifnone(shape[i], lambda: tf.shape(x)[i])
+          for i in range(get_ndim(x))]
 
 def get_ndim(x):
   try:
